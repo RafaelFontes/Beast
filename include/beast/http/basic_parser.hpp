@@ -664,11 +664,10 @@ public:
     template<class MutableBufferSequence>
     void
     prepare_body(boost::optional<
-        MutableBufferSequence>& buffers, std::size_t limit)
-    {
-        maybe_begin_body();
-        buffers.emplace(impl().on_prepare_body(limit));
-    }
+        MutableBufferSequence>& buffers, std::size_t limit);
+
+    void
+    commit_body(std::size_t n);
 
 protected:
     /** Set the split parse option.

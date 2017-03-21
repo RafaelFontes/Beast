@@ -1065,7 +1065,7 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
         }
         else if(! ec)
         {
-            parser.commit(bytes_transferred);
+            parser.commit_body(bytes_transferred);
         }
         else
         {

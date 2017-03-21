@@ -236,10 +236,15 @@ private:
     }
 
     mutable_buffers_type
-    on_prepare_body(std::size_t limit)
+    on_prepare_body(std::size_t n)
     {
-        return r_->prepare(
-            beast::detail::clamp(remain(), limit));
+        return r_->prepare(n);
+    }
+
+    void
+    on_commit_body(std::size_t n)
+    {
+        r_->commit(n);
     }
 
     void

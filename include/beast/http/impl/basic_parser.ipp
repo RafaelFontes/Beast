@@ -254,6 +254,38 @@ write_body(Reader& r,
 }
 
 template<bool isRequest, class Derived>
+template<class MutableBufferSequence>
+void
+basic_parser<isRequest, Derived>::
+prepare_body(boost::optional<
+    MutableBufferSequence>& buffers, std::size_t limit)
+{
+    maybe_begin_body();
+
+    std::size_t n;
+    switch(state_)
+    {
+    case parse_state::body_or_eof:
+        n = limit;
+        break;
+
+    default:
+        n = beast::detail::clamp(len_, limit);
+        break;
+    }
+    buffers.emplace(impl().on_prepare_body(n));
+}
+
+template<bool isRequest, class Derived>
+void
+basic_parser<isRequest, Derived>::
+commit_body(std::size_t n)
+{
+    len_ -= n;
+    impl().on_commit_body(n);
+}
+
+template<bool isRequest, class Derived>
 void
 basic_parser<isRequest, Derived>::
 split(bool value)
