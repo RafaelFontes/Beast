@@ -301,8 +301,7 @@ operator()(error_code const& ec, bool again)
 //------------------------------------------------------------------------------
 
 template<class Stream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields,
-        class Handler>
+    bool isRequest, class Derived, class Handler>
 class parse_some_message_op
 {
     struct data
@@ -310,13 +309,13 @@ class parse_some_message_op
         bool cont;
         Stream& s;
         DynamicBuffer& db;
-        message_parser<isRequest, Body, Fields>& p;
+        basic_parser<isRequest, Derived>& p;
         boost::optional<typename
             DynamicBuffer::mutable_buffers_type> mb;
         int state = 0;
 
         data(Handler& handler, Stream& s_, DynamicBuffer& db_,
-                message_parser<isRequest, Body, Fields>& p_)
+                basic_parser<isRequest, Derived>& p_)
             : cont(beast_asio_helpers::
                 is_continuation(handler))
             , s(s_)
@@ -349,8 +348,8 @@ public:
 
     friend
     void*
-    asio_handler_allocate(
-        std::size_t size, parse_some_message_op* op)
+    asio_handler_allocate(std::size_t size,
+        parse_some_message_op* op)
     {
         return beast_asio_helpers::
             allocate(size, op->d_.handler());
@@ -359,7 +358,8 @@ public:
     friend
     void
     asio_handler_deallocate(
-        void* p, std::size_t size, parse_some_message_op* op)
+        void* p, std::size_t size,
+            parse_some_message_op* op)
     {
         return beast_asio_helpers::
             deallocate(p, size, op->d_.handler());
@@ -367,7 +367,8 @@ public:
 
     friend
     bool
-    asio_handler_is_continuation(parse_some_message_op* op)
+    asio_handler_is_continuation(
+        parse_some_message_op* op)
     {
         return op->d_->cont;
     }
@@ -375,7 +376,8 @@ public:
     template<class Function>
     friend
     void
-    asio_handler_invoke(Function&& f, parse_some_message_op* op)
+    asio_handler_invoke(Function&& f,
+        parse_some_message_op* op)
     {
         return beast_asio_helpers::
             invoke(f, op->d_.handler());
@@ -383,11 +385,10 @@ public:
 };
 
 template<class Stream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields,
-        class Handler>
+    bool isRequest, class Derived, class Handler>
 void
 parse_some_message_op<Stream, DynamicBuffer,
-    isRequest, Body, Fields, Handler>::
+    isRequest, Derived, Handler>::
 operator()(error_code ec,
     std::size_t bytes_transferred, bool again)
 {
@@ -503,8 +504,7 @@ upcall:
 //------------------------------------------------------------------------------
 
 template<class Stream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields,
-        class Handler>
+    bool isRequest, class Derived, class Handler>
 class parse_message_op
 {
     struct data
@@ -512,10 +512,10 @@ class parse_message_op
         bool cont;
         Stream& s;
         DynamicBuffer& db;
-        message_parser<isRequest, Body, Fields>& p;
+        basic_parser<isRequest, Derived>& p;
 
         data(Handler& handler, Stream& s_, DynamicBuffer& db_,
-            message_parser<isRequest, Body, Fields>& p_)
+            basic_parser<isRequest, Derived>& p_)
             : cont(beast_asio_helpers::
                 is_continuation(handler))
             , s(s_)
@@ -557,7 +557,8 @@ public:
     friend
     void
     asio_handler_deallocate(
-        void* p, std::size_t size, parse_message_op* op)
+        void* p, std::size_t size,
+            parse_message_op* op)
     {
         return beast_asio_helpers::
             deallocate(p, size, op->d_.handler());
@@ -565,7 +566,8 @@ public:
 
     friend
     bool
-    asio_handler_is_continuation(parse_message_op* op)
+    asio_handler_is_continuation(
+        parse_message_op* op)
     {
         return op->d_->cont;
     }
@@ -573,7 +575,8 @@ public:
     template<class Function>
     friend
     void
-    asio_handler_invoke(Function&& f, parse_message_op* op)
+    asio_handler_invoke(
+        Function&& f, parse_message_op* op)
     {
         return beast_asio_helpers::
             invoke(f, op->d_.handler());
@@ -581,11 +584,10 @@ public:
 };
 
 template<class Stream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields,
-        class Handler>
+    bool isRequest, class Derived, class Handler>
 void
 parse_message_op<Stream, DynamicBuffer,
-    isRequest, Body, Fields, Handler>::
+    isRequest, Derived, Handler>::
 operator()(error_code const& ec, bool again)
 {
     auto& d = *d_;
@@ -593,7 +595,7 @@ operator()(error_code const& ec, bool again)
     if(! ec && ! d.p.is_done())
     {
         parse_some_message_op<Stream, DynamicBuffer,
-            isRequest, Body, Fields, parse_message_op>{
+            isRequest, Derived, parse_message_op>{
                 std::move(*this), d.s, d.db, d.p};
         return;
     }
@@ -952,10 +954,10 @@ async_parse(AsyncReadStream& stream,
 }
 
 template<class SyncReadStream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields>
+    bool isRequest, class Derived>
 void
 parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
-    message_parser<isRequest, Body, Fields>& parser)
+    basic_parser<isRequest, Derived>& parser)
 {
     static_assert(is_SyncReadStream<SyncReadStream>::value,
         "SyncReadStream requirements not met");
@@ -968,10 +970,10 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
 }
 
 template<class SyncReadStream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields>
+    bool isRequest, class Derived>
 void
 parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
-    message_parser<isRequest, Body, Fields>& parser,
+    basic_parser<isRequest, Derived>& parser,
         error_code& ec)
 {
     static_assert(is_SyncReadStream<SyncReadStream>::value,
@@ -1048,7 +1050,7 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
         // Parser wants a direct read
         //
         // VFALCO Need try/catch for std::length_error here
-        boost::optional<typename message_parser<isRequest, Body, Fields>::mutable_buffers_type> mb;
+        boost::optional<typename Derived::mutable_buffers_type> mb;
         parser.prepare_body(mb, 65536); // magic number?
         auto const bytes_transferred =
             stream.read_some(*mb, ec);
@@ -1076,10 +1078,10 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
 }
 
 template<class SyncReadStream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields>
+    bool isRequest, class Derived>
 void
 parse(SyncReadStream& stream, DynamicBuffer& dynabuf,
-    message_parser<isRequest, Body, Fields>& parser)
+    basic_parser<isRequest, Derived>& parser)
 {
     static_assert(is_SyncReadStream<SyncReadStream>::value,
         "SyncReadStream requirements not met");
@@ -1092,10 +1094,10 @@ parse(SyncReadStream& stream, DynamicBuffer& dynabuf,
 }
 
 template<class SyncReadStream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields>
+    bool isRequest, class Derived>
 void
 parse(SyncReadStream& stream, DynamicBuffer& dynabuf,
-    message_parser<isRequest, Body, Fields>& parser,
+    basic_parser<isRequest, Derived>& parser,
         error_code& ec)
 {
     static_assert(is_SyncReadStream<SyncReadStream>::value,
@@ -1113,12 +1115,12 @@ parse(SyncReadStream& stream, DynamicBuffer& dynabuf,
 }
 
 template<class AsyncReadStream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields, class ReadHandler>
+    bool isRequest, class Derived, class ReadHandler>
 typename async_completion<
     ReadHandler, void(error_code)>::result_type
 async_parse_some(AsyncReadStream& stream,
     DynamicBuffer& dynabuf,
-        message_parser<isRequest, Body, Fields>& parser,
+        basic_parser<isRequest, Derived>& parser,
             ReadHandler&& handler)
 {
     static_assert(is_AsyncReadStream<AsyncReadStream>::value,
@@ -1128,18 +1130,18 @@ async_parse_some(AsyncReadStream& stream,
     beast::async_completion<ReadHandler,
         void(error_code)> completion{handler};
     detail::parse_some_message_op<AsyncReadStream, DynamicBuffer,
-        isRequest, Body, Fields, decltype(completion.handler)>{
+        isRequest, Derived, decltype(completion.handler)>{
             completion.handler, stream, dynabuf, parser};
     return completion.result.get();
 }
 
 template<class AsyncReadStream, class DynamicBuffer,
-    bool isRequest, class Body, class Fields, class ReadHandler>
+    bool isRequest, class Derived, class ReadHandler>
 typename async_completion<
     ReadHandler, void(error_code)>::result_type
 async_parse(AsyncReadStream& stream,
     DynamicBuffer& dynabuf,
-        message_parser<isRequest, Body, Fields>& parser,
+        basic_parser<isRequest, Derived>& parser,
             ReadHandler&& handler)
 {
     static_assert(is_AsyncReadStream<AsyncReadStream>::value,
@@ -1149,7 +1151,7 @@ async_parse(AsyncReadStream& stream,
     beast::async_completion<ReadHandler,
         void(error_code)> completion{handler};
     detail::parse_message_op<AsyncReadStream, DynamicBuffer,
-        isRequest, Body, Fields, decltype(completion.handler)>{
+        isRequest, Derived, decltype(completion.handler)>{
             completion.handler, stream, dynabuf, parser};
     return completion.result.get();
 }
