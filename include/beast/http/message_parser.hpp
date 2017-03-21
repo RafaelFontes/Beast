@@ -10,6 +10,7 @@
 
 #include <beast/http/message.hpp>
 #include <beast/http/header_parser.hpp>
+#include <beast/core/detail/clamp.hpp>
 #include <boost/optional.hpp>
 #include <array>
 #include <type_traits>
@@ -232,6 +233,13 @@ private:
     {
         r_.emplace(m_);
         r_->init(this->content_length());
+    }
+
+    mutable_buffers_type
+    on_prepare_body(std::size_t limit)
+    {
+        return r_->prepare(
+            beast::detail::clamp(remain(), limit));
     }
 
     void

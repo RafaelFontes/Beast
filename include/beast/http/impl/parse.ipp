@@ -980,6 +980,7 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
         "DynamicBuffer requirements not met");
     BOOST_ASSERT(parser.need_more());
     BOOST_ASSERT(! parser.is_done());
+    BOOST_ASSERT(parser.state() != parse_state::complete);
     switch(parser.state())
     {
     case parse_state::header:
@@ -1047,10 +1048,10 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
         // Parser wants a direct read
         //
         // VFALCO Need try/catch for std::length_error here
-        auto const mb = parser.prepare(
-            dynabuf, 65536); // magic number?
+        boost::optional<typename message_parser<isRequest, Body, Fields>::mutable_buffers_type> mb;
+        parser.prepare_body(mb, 65536); // magic number?
         auto const bytes_transferred =
-            stream.read_some(mb, ec);
+            stream.read_some(*mb, ec);
         if(ec == boost::asio::error::eof)
         {
             BOOST_ASSERT(bytes_transferred == 0);
