@@ -147,7 +147,7 @@ public:
             "MoveConstructible requirements not met");
         return std::move(m_);
     }
-
+#if 0
     /** Copy body bytes already present in the buffer.
     */
     template<class DynamicBuffer>
@@ -187,6 +187,7 @@ public:
         r_->commit(n);
         this->consume(n);
     }
+#endif
 
 private:
     friend class basic_parser<isRequest, message_parser>;
