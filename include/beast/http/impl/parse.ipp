@@ -827,50 +827,53 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
             return;
         dynabuf.consume(used);
     }
-    // read some
-    boost::optional<typename
-        DynamicBuffer::mutable_buffers_type> mb;
-    auto const size =
-        read_size_helper(dynabuf, 65536); // VFALCO magic number?
-    BOOST_ASSERT(size > 0);
-    try
-    {
-        mb.emplace(dynabuf.prepare(size));
-    }
-    catch(std::length_error const&)
-    {
-        // buffer overflow
-        ec = error::buffer_overflow;
-        return;
-    }
-    auto const bytes_transferred =
-        stream.read_some(*mb, ec);
-    if(ec == boost::asio::error::eof)
-    {
-        BOOST_ASSERT(bytes_transferred == 0);
-        if(parser.got_some())
-        {
-            // caller sees EOF on next read
-            ec = {};
-            parser.write_eof(ec);
-            if(ec)
-                return;
-            BOOST_ASSERT(! parser.need_more());
-        }
-    }
-    else if(ec)
-    {
-        return;
-    }
     else
     {
-        BOOST_ASSERT(bytes_transferred > 0);
-        dynabuf.commit(bytes_transferred);
-        auto const used =
-            parser.write(dynabuf.data(), ec);
-        if(ec)
+        // read some
+        boost::optional<typename
+            DynamicBuffer::mutable_buffers_type> mb;
+        auto const size =
+            read_size_helper(dynabuf, 65536); // VFALCO magic number?
+        BOOST_ASSERT(size > 0);
+        try
+        {
+            mb.emplace(dynabuf.prepare(size));
+        }
+        catch(std::length_error const&)
+        {
+            // buffer overflow
+            ec = error::buffer_overflow;
             return;
-        dynabuf.consume(used);
+        }
+        auto const bytes_transferred =
+            stream.read_some(*mb, ec);
+        if(ec == boost::asio::error::eof)
+        {
+            BOOST_ASSERT(bytes_transferred == 0);
+            if(parser.got_some())
+            {
+                // caller sees EOF on next read
+                ec = {};
+                parser.write_eof(ec);
+                if(ec)
+                    return;
+                BOOST_ASSERT(! parser.need_more());
+            }
+        }
+        else if(ec)
+        {
+            return;
+        }
+        else
+        {
+            BOOST_ASSERT(bytes_transferred > 0);
+            dynabuf.commit(bytes_transferred);
+            auto const used =
+                parser.write(dynabuf.data(), ec);
+            if(ec)
+                return;
+            dynabuf.consume(used);
+        }
     }
 }
 
@@ -997,81 +1000,90 @@ parse_some(SyncReadStream& stream, DynamicBuffer& dynabuf,
                 return;
             dynabuf.consume(used);
         }
-        // read some
-        boost::optional<typename
-            DynamicBuffer::mutable_buffers_type> mb;
-        auto const size =
-            read_size_helper(dynabuf, 65536); // VFALCO magic number?
-        BOOST_ASSERT(size > 0);
-        try
+        if(parser.state() == parse_state::header ||
+            parser.state() == parse_state::chunk_header)
         {
-            mb.emplace(dynabuf.prepare(size));
-        }
-        catch(std::length_error const&)
-        {
-            // buffer overflow
-            ec = error::buffer_overflow;
-            return;
-        }
-        auto const bytes_transferred =
-            stream.read_some(*mb, ec);
-        if(ec == boost::asio::error::eof)
-        {
-            BOOST_ASSERT(bytes_transferred == 0);
-            if(parser.got_some())
+            // read some
+            boost::optional<typename
+                DynamicBuffer::mutable_buffers_type> mb;
+            auto const size =
+                read_size_helper(dynabuf, 65536); // VFALCO magic number?
+            BOOST_ASSERT(size > 0);
+            try
             {
-                // caller sees EOF on next read
-                ec = {};
-                parser.write_eof(ec);
+                mb.emplace(dynabuf.prepare(size));
+            }
+            catch(std::length_error const&)
+            {
+                // buffer overflow
+                ec = error::buffer_overflow;
+                return;
+            }
+            auto const bytes_transferred =
+                stream.read_some(*mb, ec);
+            if(ec == boost::asio::error::eof)
+            {
+                BOOST_ASSERT(bytes_transferred == 0);
+                if(parser.got_some())
+                {
+                    // caller sees EOF on next read
+                    ec = {};
+                    parser.write_eof(ec);
+                    if(ec)
+                        return;
+                    BOOST_ASSERT(! parser.need_more());
+                }
+            }
+            else if(ec)
+            {
+                return;
+            }
+            else
+            {
+                BOOST_ASSERT(bytes_transferred > 0);
+                dynabuf.commit(bytes_transferred);
+                auto const used =
+                    parser.write(dynabuf.data(), ec);
                 if(ec)
                     return;
-                BOOST_ASSERT(! parser.need_more());
+                dynabuf.consume(used);
             }
-        }
-        else if(ec)
-        {
-            return;
-        }
-        else
-        {
-            BOOST_ASSERT(bytes_transferred > 0);
-            dynabuf.commit(bytes_transferred);
-            auto const used =
-                parser.write(dynabuf.data(), ec);
-            if(ec)
-                return;
-            dynabuf.consume(used);
         }
         break;
     }
 
     default:
     {
-        // Parser wants a direct read
-        //
-        // VFALCO Need try/catch for std::length_error here
-        boost::optional<typename Derived::mutable_buffers_type> mb;
-        parser.prepare_body(mb, 65536); // magic number?
-        auto const bytes_transferred =
-            stream.read_some(*mb, ec);
-        if(ec == boost::asio::error::eof)
+        if(dynabuf.size() > 0)
         {
-            BOOST_ASSERT(bytes_transferred == 0);
-            // Caller will see eof on next read.
-            ec = {};
-            parser.write_eof(ec);
-            if(ec)
-                return;
-            BOOST_ASSERT(! parser.need_more());
-            BOOST_ASSERT(parser.is_done());
-        }
-        else if(! ec)
-        {
-            parser.commit_body(bytes_transferred);
+            parser.copy_body(dynabuf);
         }
         else
         {
-            return;
+            boost::optional<typename Derived::mutable_buffers_type> mb;
+            // VFALCO Need try/catch for std::length_error here
+            parser.prepare_body(mb, 65536); // magic number?
+            auto const bytes_transferred =
+                stream.read_some(*mb, ec);
+            if(ec == boost::asio::error::eof)
+            {
+                BOOST_ASSERT(bytes_transferred == 0);
+                // Caller will see eof on next read.
+                ec = {};
+                parser.write_eof(ec);
+                if(ec)
+                    return;
+                BOOST_ASSERT(! parser.need_more());
+                BOOST_ASSERT(parser.is_done());
+            }
+            else if(! ec)
+            {
+                parser.commit_body(bytes_transferred);
+            }
+            else
+            {
+                return;
+            }
         }
     }
     }

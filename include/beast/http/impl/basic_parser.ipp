@@ -254,6 +254,42 @@ write_body(Reader& r,
 }
 
 template<bool isRequest, class Derived>
+template<class DynamicBuffer>
+void
+basic_parser<isRequest, Derived>::
+copy_body(DynamicBuffer& dynabuf)
+{
+    BOOST_ASSERT(
+        state_ == parse_state::body ||
+        state_ == parse_state::body_or_eof ||
+        state_ == parse_state::chunk_body);
+    using boost::asio::buffer_copy;
+
+    maybe_begin_body();
+
+    switch(state_)
+    {
+    case parse_state::body_or_eof:
+        dynabuf.consume(buffer_copy(
+            impl().on_prepare_body(dynabuf.size()),
+                dynabuf.data()));
+        break;
+
+    default:
+    {
+        BOOST_ASSERT(len_ > 0);
+        auto const n = buffer_copy(
+            impl().on_prepare_body(
+                beast::detail::clamp(len_)),
+                    dynabuf.data());
+        dynabuf.consume(n);
+        commit_body(n);
+        break;
+    }
+    }
+}
+
+template<bool isRequest, class Derived>
 template<class MutableBufferSequence>
 void
 basic_parser<isRequest, Derived>::
@@ -281,8 +317,27 @@ void
 basic_parser<isRequest, Derived>::
 commit_body(std::size_t n)
 {
-    len_ -= n;
     impl().on_commit_body(n);
+    switch(state_)
+    {
+    case parse_state::body:
+        len_ -= n;
+        if(len_ == 0)
+        {
+            error_code ec;
+            do_end_message(ec);
+        }
+        break;
+
+    case parse_state::chunk_body:
+        len_ -= n;
+        if(len_ == 0)
+            state_ = parse_state::chunk_header;
+        break;
+    
+    default:
+        break;
+    }
 }
 
 template<bool isRequest, class Derived>
@@ -971,6 +1026,7 @@ do_end_message(error_code& ec)
     if(ec)
         return;
     f_ |= flagMsgDone;
+    state_ = parse_state::complete;
 }
 
 } // http

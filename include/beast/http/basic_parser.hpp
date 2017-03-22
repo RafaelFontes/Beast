@@ -661,6 +661,10 @@ public:
         len_ -= n;
     }
 
+    template<class DynamicBuffer>
+    void
+    copy_body(DynamicBuffer& dynabuf);
+
     template<class MutableBufferSequence>
     void
     prepare_body(boost::optional<
