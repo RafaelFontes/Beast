@@ -825,24 +825,33 @@ do_header(int status, std::false_type)
         status == 304)          // Not Modified
     {
         f_ |= flagMsgDone;
+        state_ = parse_state::complete;
         return;
     }
 
     if(f_ & flagContentLength)
     {
         if(len_ > 0)
+        {
             f_ |= flagHasBody;
+            state_ = parse_state::body;
+        }
         else
+        {
             f_ |= flagMsgDone;
+            state_ = parse_state::complete;
+        }
     }
     else if(f_ & flagChunked)
     {
         f_ |= flagHasBody;
+        state_ = parse_state::chunk_header;
     }
     else
     {
         f_ |= flagHasBody;
         f_ |= flagNeedEOF;
+        state_ = parse_state::body_or_eof;
     }
 }
 
