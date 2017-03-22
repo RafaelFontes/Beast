@@ -83,6 +83,7 @@ private:
         void
         finish()
         {
+            body_.resize(len_);
         }
     };
 
